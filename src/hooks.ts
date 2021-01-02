@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { clamp } from "./util";
 
 export function useKeys() {
   const [keys, setKeys] = useState<KeyboardEvent["key"][]>([]);
@@ -26,4 +27,24 @@ export function useKeys() {
   }, []);
 
   return keys;
+}
+
+export function useClampedState(
+  min: number,
+  max: number,
+  initialValue: number
+): [number, Function] {
+  const [value, setValueRaw] = useState(initialValue);
+
+  const setValue = (valueOrFunction: number | Function) => {
+    setValueRaw((prevValue: number) => {
+      let value =
+        typeof valueOrFunction === "function"
+          ? valueOrFunction(prevValue)
+          : valueOrFunction;
+      return clamp(min, max, value);
+    });
+  };
+
+  return [value, setValue];
 }
