@@ -219,7 +219,19 @@ export default function App() {
         });
       }
     });
-  }, [caughtFish, resetVx, resetVy, resetX, resetY, x, y]);
+  }, [
+    caughtFish,
+    resetVx,
+    resetVy,
+    resetX,
+    resetY,
+    setCaughtFish,
+    setFish,
+    setLives,
+    setScore,
+    x,
+    y,
+  ]);
 
   useEffect(() => {
     function update(timestamp: number) {
