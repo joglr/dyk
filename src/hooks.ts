@@ -1,5 +1,28 @@
-import { useEffect, useState } from "react";
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { clamp } from "./util";
+
+export function useKeyBinding(
+  key: KeyboardEvent["key"],
+  callback: Function,
+  keyup = false
+) {
+  useEffect(() => {
+    function handler(event: KeyboardEvent) {
+      if (event.key === key) {
+        callback();
+      }
+    }
+    document.addEventListener(keyup ? "keyup" : "keydown", handler);
+    return () =>
+      document.removeEventListener(keyup ? "keyup" : "keydown", handler);
+  }, []);
+}
 
 export function useKeys() {
   const [keys, setKeys] = useState<KeyboardEvent["key"][]>([]);
@@ -33,8 +56,8 @@ export function useClampedState(
   min: number,
   max: number,
   initialValue: number
-): [number, Function] {
-  const [value, setValueRaw] = useState(initialValue);
+): [number, Function, Function] {
+  const [value, setValueRaw, reset] = useResetableState<number>(initialValue);
 
   const setValue = (valueOrFunction: number | Function) => {
     setValueRaw((prevValue: number) => {
@@ -46,5 +69,16 @@ export function useClampedState(
     });
   };
 
-  return [value, setValue];
+  return [value, setValue, reset];
+}
+
+export function useResetableState<T>(
+  initialValue: T | (() => T)
+): [T, Dispatch<SetStateAction<T>>, Function] {
+  // T = T ?? typeof initialValue
+  const [value, setValue] = useState<T>(initialValue);
+  const reset = useCallback(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+  return [value, setValue, reset];
 }
