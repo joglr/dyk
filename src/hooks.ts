@@ -21,7 +21,7 @@ export function useKeyBinding(
     document.addEventListener(keyup ? "keyup" : "keydown", handler);
     return () =>
       document.removeEventListener(keyup ? "keyup" : "keydown", handler);
-  }, []);
+  }, [callback, key, keyup]);
 }
 
 export function useKeys() {
