@@ -234,12 +234,12 @@ export default function App() {
   );
 
   function reset() {
+    resetFish();
     dispatch({ type: RESET });
     resetX();
     resetY();
     resetVx();
     resetVy();
-    resetFish();
   }
 
   const lastFrameRef = useRef(0);
@@ -248,6 +248,8 @@ export default function App() {
   const keys = useKeys();
 
   useEffect(() => {
+    let canceled = false;
+
     if (gameStatus === "RUNNING") {
       setFish((fish) => {
         let fishInProximity: [Symbol, number][] = [];
@@ -256,7 +258,7 @@ export default function App() {
           const distance = dist({ x, y }, f);
           if (distance < PLAYER_SIZE) {
             if (ENEMIES.includes(f.icon)) {
-              dispatch({ type: END });
+              if (!canceled) dispatch({ type: END });
               resetX();
               resetY();
               resetVx();
@@ -277,20 +279,21 @@ export default function App() {
         if (caughtFish !== null) {
           if (y > SEA_LEVEL) {
             setCaughtFish(null);
-            dispatch({
-              type: SCORE,
-              value:
-                1 +
-                Math.abs((fish.find((f) => f.id === caughtFish) as IFish).vx),
-            });
-            const fishLeft = fish.filter((f) => f.id !== caughtFish);
-            return [
-              ...fishLeft,
-              ...generateFish(
-                1 + Math.floor(Math.random() * 3),
-                Boolean(fishLeft.find((f) => FISH.includes(f.icon)))
-              ),
-            ];
+            const cf = fish.find((f) => f.id === caughtFish);
+            if (cf) {
+              dispatch({
+                type: SCORE,
+                value: 1 + Math.abs(cf.vx),
+              });
+              const fishLeft = fish.filter((f) => f.id !== caughtFish);
+              return [
+                ...fishLeft,
+                ...generateFish(
+                  1 + Math.floor(Math.random() * 3),
+                  Boolean(fishLeft.find((f) => FISH.includes(f.icon)))
+                ),
+              ];
+            }
           }
           return fish.map((f) => {
             if (f.id === caughtFish) {
@@ -308,6 +311,7 @@ export default function App() {
         return fish;
       });
     }
+    return () => void (canceled = true);
   }, [
     caughtFish,
     gameStatus,
