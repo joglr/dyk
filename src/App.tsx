@@ -1,5 +1,5 @@
 import { Fade, Grow } from "@material-ui/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import styled from "styled-components";
 import {
   useClampedState,
@@ -11,11 +11,12 @@ import { dist, pick } from "./util";
 
 const W = () => window.innerWidth;
 const H = () => window.innerHeight;
+const GAME_DURATION = 30;
 const PLAYER_SIZE = 24;
 const JUMP_ACCELERATION = 70;
 const GRAVITY_ACCELERATION = 1 / 5;
 const MIN_COORD = PLAYER_SIZE / 2;
-const FRICTION_COEFFIENT = 1 - 1 / 100;
+const FRICTION_COEFFICIENT = 1 - 1 / 100;
 const PLAYER_SPEED = 2;
 const SEA_LEVEL = 0.2 * H();
 
@@ -100,7 +101,7 @@ const Score = styled.div<{ expanded: boolean }>`
   left: 50%;
   transform: translateX(-50%);
 
-  font-size: ${(p) => (p.expanded ? 600 : 200)}%;
+  font-size: ${(p) => (p.expanded ? 400 : 200)}%;
   font-weight: bold;
 `;
 
@@ -113,7 +114,72 @@ const Lives = styled.div`
 const FISH = ["🐡", "🐟", "🦐"];
 const ENEMIES: string[] = ["🦈", "🦑"];
 
-function generateFish(count: number) {
+interface State {
+  gameStatus: "IDLE" | "POST_GAME" | "RUNNING";
+  gameStartTime: number | null;
+  score: number;
+}
+
+enum ActionType {
+  START,
+  END,
+  SCORE,
+  RESET,
+}
+
+type Action =
+  | {
+      type: ActionType.START;
+    }
+  | {
+      type: ActionType.END;
+    }
+  | {
+      type: ActionType.RESET;
+    }
+  | {
+      type: ActionType.SCORE;
+      value: number;
+    };
+
+type Reducer<S, A> = (prevState: S, action: A) => S;
+
+const { START, END, SCORE, RESET } = ActionType;
+
+function gameStateReducer(prevState: State, action: Action): State {
+  switch (action.type) {
+    case START:
+      return {
+        gameStatus: "RUNNING",
+        gameStartTime: new Date().getTime(),
+        score: 0,
+      };
+    case END:
+      return {
+        gameStatus: "POST_GAME",
+        gameStartTime: null,
+        score: prevState.score,
+      };
+    case SCORE:
+      return {
+        gameStatus: prevState.gameStatus,
+        gameStartTime: prevState.gameStartTime,
+        score: prevState.score + action.value,
+      };
+    case RESET:
+      return getInitialState();
+  }
+}
+
+function getInitialState(): State {
+  return {
+    gameStatus: "IDLE",
+    gameStartTime: null,
+    score: 0,
+  };
+}
+
+function generateFish(count: number, onlyFish = false) {
   let fish = [];
 
   for (let i = 0; i < count; i++) {
@@ -123,7 +189,7 @@ function generateFish(count: number) {
       y: SEA_LEVEL * Math.random(),
       vx: Math.random() - 0.5,
       vy: 0,
-      icon: pick([...FISH, ...ENEMIES]),
+      icon: pick([...FISH, ...(onlyFish ? [] : ENEMIES)]),
     });
   }
 
@@ -132,6 +198,10 @@ function generateFish(count: number) {
 
 export default function App() {
   const [debug, setDebug] = useState(false);
+
+  const [{ gameStartTime, gameStatus, score }, dispatch] = useReducer<
+    Reducer<State, Action>
+  >(gameStateReducer, getInitialState());
 
   const [vx, setVx, resetVx] = useClampedState(-10, 10, 0);
   const [vy, setVy, resetVy] = useClampedState(-10, 10, 0);
@@ -145,21 +215,18 @@ export default function App() {
   const [caughtFish, setCaughtFish] = useResetableState<Symbol | null>(null);
 
   const [isDiving, setIsDiving] = useResetableState(false);
-  const [lives, setLives, resetLives] = useResetableState(3);
-  const [score, setScore, resetScore] = useResetableState(0);
 
   const [fish, setFish, resetFish] = useResetableState<IFish[]>(() =>
     generateFish(10)
   );
 
   function reset() {
+    dispatch({ type: RESET });
     resetX();
     resetY();
     resetVx();
     resetVy();
     resetFish();
-    resetLives();
-    resetScore();
   }
 
   const lastFrameRef = useRef(0);
@@ -175,7 +242,7 @@ export default function App() {
           const distance = dist({ x, y }, f);
           if (distance < PLAYER_SIZE) {
             if (ENEMIES.includes(f.icon)) {
-              setLives((prevLives) => prevLives - 1);
+              dispatch({ type: END });
               resetX();
               resetY();
               resetVx();
@@ -195,15 +262,18 @@ export default function App() {
       } else {
         if (y > SEA_LEVEL) {
           setCaughtFish(null);
-          setScore(
-            (prevScore) =>
-              prevScore +
-              1 +
-              (fish.find((f) => f.id === caughtFish) as IFish).vx
-          );
+          dispatch({
+            type: SCORE,
+            value:
+              1 + Math.abs((fish.find((f) => f.id === caughtFish) as IFish).vx),
+          });
+          const fishLeft = fish.filter((f) => f.id !== caughtFish);
           return [
-            ...fish.filter((f) => f.id !== caughtFish),
-            ...generateFish(1),
+            ...fishLeft,
+            ...generateFish(
+              1 + Math.floor(Math.random() * 3),
+              Boolean(fishLeft.find((f) => FISH.includes(f.icon)))
+            ),
           ];
         }
         return fish.map((f) => {
@@ -227,11 +297,15 @@ export default function App() {
     resetY,
     setCaughtFish,
     setFish,
-    setLives,
-    setScore,
     x,
     y,
   ]);
+
+  function startGame() {
+    if (gameStatus === "IDLE") {
+      dispatch({ type: START });
+    }
+  }
 
   useEffect(() => {
     function update(timestamp: number) {
@@ -259,7 +333,7 @@ export default function App() {
       setX((prevX: number) => prevX + vx);
       setY((prevY: number) => prevY + vy);
       // Drag
-      setVx((prevVx: number) => prevVx * FRICTION_COEFFIENT);
+      setVx((prevVx: number) => prevVx * FRICTION_COEFFICIENT);
 
       setVy((_pvy: number) =>
         isDiving ? -30 * GRAVITY_ACCELERATION : 30 * GRAVITY_ACCELERATION
@@ -270,6 +344,7 @@ export default function App() {
       for (let key of keys) {
         switch (key) {
           case " ":
+            startGame();
             spacePressed = true;
             if (!isDiving) {
               if (keys.includes("ArrowLeft")) setVx(-1 * JUMP_ACCELERATION);
@@ -280,11 +355,13 @@ export default function App() {
             break;
 
           case "ArrowLeft":
+            startGame();
             setVx((_x: number) => -PLAYER_SPEED);
 
             break;
 
           case "ArrowRight":
+            startGame();
             setVx((_x: number) => PLAYER_SPEED);
             break;
           default:
@@ -296,6 +373,17 @@ export default function App() {
     const frame = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frame);
   });
+
+  const timeElapsedInSeconds =
+    gameStartTime !== null
+      ? (new Date().getTime() - gameStartTime) / 1000
+      : null;
+
+  useEffect(() => {
+    if (timeElapsedInSeconds && timeElapsedInSeconds >= GAME_DURATION) {
+      dispatch({ type: END });
+    }
+  }, [timeElapsedInSeconds]);
 
   useKeyBinding("d", () => setDebug((debug) => !debug), true);
 
@@ -319,7 +407,7 @@ export default function App() {
             </Grow>
           ))}
         </Ocean>
-        {lives > 0 && (
+        {gameStartTime && (
           <Entity pos={[x, y]}>
             <EntityIcon direction={vx > 0}>🦅</EntityIcon>
           </Entity>
@@ -338,24 +426,25 @@ export default function App() {
             <div>caughtFish: {caughtFish}</div>
           </Debug>
         </Grow>
-
-        <Score expanded={lives === 0}>
-          {lives > 0 ? (
-            <Lives>
-              {[...new Array(3)].map((_, i) => (
-                <Fade in={lives - 1 >= i} key={i}>
-                  <span>❤</span>
-                </Fade>
-              ))}
-            </Lives>
-          ) : (
+        <Score expanded={gameStatus === "POST_GAME"}>
+          <Grow in={gameStatus === "POST_GAME"}>
             <div>
-              <div>You died!</div>
+              <div>Game over!</div>
             </div>
-          )}
-          <div>Score: {Math.round(score)}</div>
-          <Grow in={lives === 0}>
+          </Grow>
+          <Grow in={gameStatus === "POST_GAME" || gameStatus === "RUNNING"}>
+            <div>Score: {Math.round(score)}</div>
+          </Grow>
+          <Grow in={Boolean(gameStartTime)}>
+            <div>
+              {Math.round(GAME_DURATION - (timeElapsedInSeconds as number))}s
+            </div>
+          </Grow>
+          <Grow in={gameStatus === "POST_GAME"}>
             <TryAgainButton onClick={reset}>Try again</TryAgainButton>
+          </Grow>
+          <Grow in={gameStatus === "IDLE"}>
+            <div>Press ⬅, ➡ or [space] to start game!</div>
           </Grow>
         </Score>
       </Overlay>
