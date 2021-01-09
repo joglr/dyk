@@ -45,6 +45,12 @@ const Overlay = styled.div`
   top: 0;
   left: 0;
   right: 0;
+  transition: 1s font-size;
+  position: absolute;
+  top: ${PLAYER_SIZE}px;
+  left: ${PLAYER_SIZE}px;
+  font-size: 400%;
+  font-weight: bold;
 `;
 
 const World = styled.div`
@@ -82,7 +88,14 @@ const Entity = styled.div.attrs((p: any) => ({
 `;
 
 const Debug = styled.code`
-  /* font-family: monospace; */
+  position: absolute;
+  bottom: 0;
+  font-family: monospace;
+`;
+
+const HelpText = styled.div`
+  position: absolute;
+  top: 0;
 `;
 
 const EntityIcon = styled.div<any>`
@@ -92,17 +105,6 @@ const EntityIcon = styled.div<any>`
   transition: transform 0.25s;
   transform: translate(-50%, calc(-50% - 5px))
     rotateY(${(p) => (p.direction ? "180deg" : "0")});
-`;
-
-const Score = styled.div<{ expanded: boolean }>`
-  transition: 1s font-size;
-  position: absolute;
-  top: ${(p) => (p.expanded ? "50%" : `${PLAYER_SIZE}px`)};
-  left: 50%;
-  transform: translateX(-50%);
-
-  font-size: ${(p) => (p.expanded ? 400 : 200)}%;
-  font-weight: bold;
 `;
 
 const TryAgainButton = styled.button`
@@ -246,7 +248,6 @@ export default function App() {
   const keys = useKeys();
 
   useEffect(() => {
-    console.log(gameStatus);
     if (gameStatus === "RUNNING") {
       setFish((fish) => {
         let fishInProximity: [Symbol, number][] = [];
@@ -415,10 +416,21 @@ export default function App() {
   return (
     <>
       <World>
+        <Grow in={debug}>
+          <Debug>
+            <div>fps: {frameRate.current.toFixed(0)}</div>
+            <div>x: {x.toFixed(0)}</div>
+            <div>y: {y.toFixed(0)}</div>
+            <div>vx: {vx.toFixed(0)}</div>
+            <div>vy: {vy.toFixed(0)}</div>
+            <div>isDiving: {isDiving.toString()}</div>
+            <div>caughtFish: {caughtFish}</div>
+          </Debug>
+        </Grow>
         <Sky />
         <Ocean ref={oceanRef as any}>
           {fish.map((fish, i) => (
-            <Grow in={true} key={i}>
+            <Grow key={i} in={true} appear>
               <Entity
                 style={{
                   zIndex: Z.FISH,
@@ -438,46 +450,36 @@ export default function App() {
       </World>
 
       <Overlay>
-        <Grow in={debug}>
-          <Debug>
-            <div>fps: {frameRate.current.toFixed(0)}</div>
-            <div>x: {x.toFixed(0)}</div>
-            <div>y: {y.toFixed(0)}</div>
-            <div>vx: {vx.toFixed(0)}</div>
-            <div>vy: {vy.toFixed(0)}</div>
-            <div>isDiving: {isDiving.toString()}</div>
-            <div>caughtFish: {caughtFish}</div>
-          </Debug>
+        <Grow
+          in={gameStatus === "POST_GAME" || gameStatus === "RUNNING"}
+          appear
+        >
+          <div>Score: {Math.round(score)}</div>
         </Grow>
-        <Score expanded={gameStatus === "POST_GAME"}>
-          <Grow in={gameStatus === "POST_GAME"}>
+        <Grow in={gameStatus === "RUNNING"}>
+          <div>
+            {Math.round(GAME_DURATION - (timeElapsedInSeconds as number))}s
+          </div>
+        </Grow>
+        <Grow in={gameStatus === "POST_GAME"}>
+          <div>
             <GameOver>Game over!</GameOver>
-          </Grow>
-          <Grow in={gameStatus === "POST_GAME" || gameStatus === "RUNNING"}>
-            <div>Score: {Math.round(score)}</div>
-          </Grow>
-          <Grow in={Boolean(gameStartTime)}>
-            <div>
-              {Math.round(GAME_DURATION - (timeElapsedInSeconds as number))}s
-            </div>
-          </Grow>
-          <Grow in={gameStatus === "POST_GAME"}>
             <TryAgainButton onClick={reset}>Try again</TryAgainButton>
-          </Grow>
-          <Grow in={gameStatus === "IDLE"}>
-            <div>
-              <div>Press ⬅, ➡ or [space] to start game!</div>
-              <br />
-              <div
-                style={{
-                  fontSize: "70%",
-                }}
-              >
-                Catch {FISH.join("")}, but avoid {ENEMIES.join("")}!
-              </div>
+          </div>
+        </Grow>
+        <Grow in={gameStatus === "IDLE"}>
+          <HelpText>
+            <div>Press ⬅, ➡ or [space] to start game!</div>
+            <br />
+            <div
+              style={{
+                fontSize: "70%",
+              }}
+            >
+              Catch {FISH.join("")}, but avoid {ENEMIES.join("")}!
             </div>
-          </Grow>
-        </Score>
+          </HelpText>
+        </Grow>
       </Overlay>
     </>
   );
