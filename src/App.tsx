@@ -1,5 +1,5 @@
 import { Fade, Grow } from "@material-ui/core";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import styled from "styled-components";
 import {
   useClampedState,
@@ -285,12 +285,12 @@ export default function App() {
     resetDiveTime();
   }
 
-  function endGame() {
+  const endGame = useCallback(() => {
     if (!highScore || score > highScore) {
       setHighScore(score);
     }
     dispatch({ type: END });
-  }
+  }, [highScore, score, setHighScore]);
 
   const lastFrameRef = useRef(0);
   const frameRate = useRef(0);
@@ -383,6 +383,7 @@ export default function App() {
     x,
     y,
     resetDiveTime,
+    endGame,
   ]);
 
   function startGame() {
@@ -478,7 +479,7 @@ export default function App() {
     ) {
       endGame();
     }
-  }, [timeElapsedInSeconds, diveDurationInSeconds]);
+  }, [timeElapsedInSeconds, diveDurationInSeconds, endGame]);
 
   useKeyBinding("d", () => setDebug((debug) => !debug), true);
 
