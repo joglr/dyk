@@ -5,6 +5,7 @@ import {
   useClampedState,
   useKeyBinding,
   useKeys,
+  useLocalStorage,
   useResetableState,
 } from "./hooks";
 import { dist, pick } from "./util";
@@ -22,6 +23,7 @@ const FRICTION_COEFFICIENT = 1 - 1 / 100;
 const PLAYER_SPEED = 2;
 const OCEAN_LEVEL_FRACTION = 0.4;
 const getOceanLevel = () => OCEAN_LEVEL_FRACTION * H();
+const TIMED_HIGH_SCORE_STORAGE_KEY = "timed_highscore";
 
 const Z = {
   SKY: -200,
@@ -153,8 +155,8 @@ const GameOver = styled.div`
   color: red;
 `;
 
-const FISH = ["🐡", "🐟", "🦐"];
-const ENEMIES: string[] = ["🦈", "🦑"];
+const FISH = ["🐡", "🐟", "🐠", "🦐"];
+const ENEMIES: string[] = ["🐋", "🦈", "🦑", ""];
 
 interface State {
   gameStatus: "IDLE" | "POST_GAME" | "RUNNING";
@@ -245,6 +247,11 @@ export default function App() {
     Reducer<State, Action>
   >(gameStateReducer, getInitialState());
 
+  const [highScore, setHighScore] = useLocalStorage<number | null>(
+    TIMED_HIGH_SCORE_STORAGE_KEY,
+    null
+  );
+
   const [vx, setVx, resetVx] = useClampedState(-10, 10, 0);
   const [vy, setVy, resetVy] = useClampedState(-10, 10, 0);
   const [x, setX, resetX] = useClampedState(
@@ -278,6 +285,13 @@ export default function App() {
     resetDiveTime();
   }
 
+  function endGame() {
+    if (!highScore || score > highScore) {
+      setHighScore(score);
+    }
+    dispatch({ type: END });
+  }
+
   const lastFrameRef = useRef(0);
   const frameRate = useRef(0);
 
@@ -301,7 +315,7 @@ export default function App() {
           const distance = dist({ x, y }, f);
           if (distance < PLAYER_SIZE) {
             if (ENEMIES.includes(f.icon)) {
-              if (!canceled) dispatch({ type: END });
+              if (!canceled) endGame();
               resetX();
               resetY();
               resetVx();
@@ -462,7 +476,7 @@ export default function App() {
       (timeElapsedInSeconds && timeElapsedInSeconds >= GAME_DURATION) ||
       (diveDurationInSeconds && diveDurationInSeconds >= BREATH_DURATION)
     ) {
-      dispatch({ type: END });
+      endGame();
     }
   }, [timeElapsedInSeconds, diveDurationInSeconds]);
 
@@ -516,7 +530,12 @@ export default function App() {
           in={gameStatus === "POST_GAME" || gameStatus === "RUNNING"}
           appear
         >
-          <div>Score: {Math.round(score)}</div>
+          <div>
+            Score: {Math.round(score)}
+            {gameStatus === "POST_GAME" && highScore && (
+              <>, high score: {highScore}</>
+            )}
+          </div>
         </Grow>
         <Grow in={gameStatus === "RUNNING"}>
           <div>
@@ -534,6 +553,7 @@ export default function App() {
             <h1>🦅 Plummet {pkg.version}</h1>
             <div>Press any key to start the game!</div>
             <Controls>
+              {highScore && <div>Your high score: {highScore}</div>}
               <div>
                 <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to move
               </div>
