@@ -50,12 +50,15 @@ const Overlay = styled.div`
   top: 0;
   left: 0;
   right: 0;
-  transition: 1s font-size;
   position: absolute;
   top: ${PLAYER_SIZE}px;
   left: ${PLAYER_SIZE}px;
   font-size: 300%;
   font-weight: bold;
+`;
+
+const H1 = styled.h1`
+  margin-bottom: 0.5em;
 `;
 
 const World = styled.div`
@@ -97,6 +100,7 @@ const Entity = styled.div.attrs((p: any) => ({
     transform: `translate(${p.pos[0]}px, ${H() - p.pos[1]}px)`,
   },
 }))<any>`
+  will-change: transform;
   position: absolute;
   height: 0;
   width: 0;
@@ -130,18 +134,6 @@ const TryAgainButton = styled.button`
     cursor: pointer;
   }
 `;
-
-const HelpText = styled.div`
-  position: absolute;
-  top: 0;
-  line-height: 125%;
-`;
-
-const Controls = styled.div`
-  margin-top: 20px;
-  font-size: 70%;
-`;
-
 const Key = styled.span`
   background-color: #fff;
   box-shadow: 0 0 0 2px black inset, 0 0 4px 0 black inset;
@@ -151,8 +143,26 @@ const Key = styled.span`
   /* margin: -15px 0; */
 `;
 
+const HelpText = styled.div`
+  position: absolute;
+  top: 0;
+  line-height: 125%;
+  div:not(${Key}) {
+    /* -webkit-text-stroke: 1px #fff; */
+  }
+`;
+
+const Controls = styled.div`
+  margin-top: 20px;
+  font-size: 70%;
+`;
+
 const GameOver = styled.div`
   color: red;
+`;
+
+const Version = styled.div`
+  font-size: 50%;
 `;
 
 const FISH = ["🐡", "🐟", "🐠", "🦐"];
@@ -499,7 +509,10 @@ export default function App() {
     }
   }, [timeElapsedInSeconds, diveDurationInSeconds, endGame]);
 
-  useKeyBinding("d", () => setDebug((debug) => !debug), true);
+  useKeyBinding("r", () => {
+    if (gameStatus === "RUNNING") reset();
+  });
+  useKeyBinding("d", () => setDebug((debug) => !debug));
 
   return (
     <>
@@ -570,23 +583,23 @@ export default function App() {
         </Grow>
         <Grow in={gameStatus === "IDLE"}>
           <HelpText>
-            <h1>🦅 Plummet {pkg.version}</h1>
-            <div>Press any key to start the game!</div>
+            <H1>Plummet 🦅</H1>
+            <div>
+              {" >"} Press any key to start! {" < "}
+            </div>
             <Controls>
-              {highScore && <div>Your high score: {highScore}</div>}
               <div>
-                <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to move
-              </div>
-              <div>
+                <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to move.
                 Hold <Key>space</Key> to dive
               </div>
               <div>
                 Catch {FISH.join("")}, avoid {ENEMIES.join("")}!
               </div>
               <div>
-                You got <u>{GAME_DURATION}</u> seconds
+                You got <u>{GAME_DURATION}</u> seconds, watch your breath!
               </div>
-              <div>Watch your breath!</div>
+              {highScore && <div>Your high score: {highScore}</div>}
+              <Version>Version {pkg.version}</Version>
             </Controls>
           </HelpText>
         </Grow>

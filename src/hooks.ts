@@ -10,7 +10,7 @@ import { clamp } from "./util";
 export function useKeyBinding(
   key: KeyboardEvent["key"],
   callback: Function,
-  keyup = false
+  keydown = false
 ) {
   useEffect(() => {
     function handler(event: KeyboardEvent) {
@@ -18,10 +18,10 @@ export function useKeyBinding(
         callback();
       }
     }
-    document.addEventListener(keyup ? "keyup" : "keydown", handler);
+    document.addEventListener(keydown ? "keydown" : "keyup", handler);
     return () =>
-      document.removeEventListener(keyup ? "keyup" : "keydown", handler);
-  }, [callback, key, keyup]);
+      document.removeEventListener(keydown ? "keydown" : "keyup", handler);
+  }, [callback, key, keydown]);
 }
 
 export function useLocalStorage<T>(key: string, initialValue: T) {
