@@ -8,6 +8,7 @@ import {
   useResetableState,
 } from "./hooks";
 import { dist, pick } from "./util";
+import pkg from "./../package.json";
 
 const W = () => window.innerWidth;
 const H = () => window.innerHeight;
@@ -367,6 +368,7 @@ export default function App() {
     diveTime,
     x,
     y,
+    resetDiveTime,
   ]);
 
   function startGame() {
@@ -477,7 +479,6 @@ export default function App() {
             <div>vx: {vx.toFixed(0)}</div>
             <div>vy: {vy.toFixed(0)}</div>
             <div>isDiving: {isDiving.toString()}</div>
-            <div>caughtFish: {caughtFish}</div>
           </Debug>
         </Grow>
         <Grow in={gameStatus === "RUNNING"}>
@@ -510,7 +511,6 @@ export default function App() {
           </Entity>
         )}
       </World>
-
       <Overlay>
         <Grow
           in={gameStatus === "POST_GAME" || gameStatus === "RUNNING"}
@@ -531,7 +531,7 @@ export default function App() {
         </Grow>
         <Grow in={gameStatus === "IDLE"}>
           <HelpText>
-            <h1>🦅 Plummet</h1>
+            <h1>🦅 Plummet {pkg.version}</h1>
             <div>Press any key to start the game!</div>
             <Controls>
               <div>
