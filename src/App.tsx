@@ -1,4 +1,4 @@
-import { Fade, Grow } from "@material-ui/core";
+import { Grow } from "@material-ui/core";
 import { useEffect, useReducer, useRef, useState } from "react";
 import styled from "styled-components";
 import {
@@ -107,7 +107,7 @@ const Score = styled.div<{ expanded: boolean }>`
 
 const TryAgainButton = styled.button``;
 
-const Lives = styled.div`
+const GameOver = styled.div`
   color: red;
 `;
 
@@ -235,62 +235,67 @@ export default function App() {
   const keys = useKeys();
 
   useEffect(() => {
-    setFish((fish) => {
-      if (caughtFish === null) {
-        let fishInProximity: [Symbol, number][] = [];
-        for (let f of fish) {
-          const distance = dist({ x, y }, f);
-          if (distance < PLAYER_SIZE) {
-            if (ENEMIES.includes(f.icon)) {
-              dispatch({ type: END });
-              resetX();
-              resetY();
-              resetVx();
-              resetVy();
-            } else if (FISH.includes(f.icon)) {
-              fishInProximity.push([f.id, distance]);
+    console.log(gameStatus);
+    if (gameStatus === "RUNNING") {
+      setFish((fish) => {
+        if (caughtFish === null) {
+          let fishInProximity: [Symbol, number][] = [];
+          for (let f of fish) {
+            const distance = dist({ x, y }, f);
+            if (distance < PLAYER_SIZE) {
+              if (ENEMIES.includes(f.icon)) {
+                dispatch({ type: END });
+                resetX();
+                resetY();
+                resetVx();
+                resetVy();
+              } else if (FISH.includes(f.icon)) {
+                fishInProximity.push([f.id, distance]);
+              }
             }
           }
-        }
-        if (fishInProximity.length > 0) {
-          let closestFish = fishInProximity.sort(([, d1], [, d2]) => {
-            return d1 - d2;
-          })[0];
-          setCaughtFish(closestFish[0]);
-        }
-        return fish;
-      } else {
-        if (y > SEA_LEVEL) {
-          setCaughtFish(null);
-          dispatch({
-            type: SCORE,
-            value:
-              1 + Math.abs((fish.find((f) => f.id === caughtFish) as IFish).vx),
+          if (fishInProximity.length > 0) {
+            let closestFish = fishInProximity.sort(([, d1], [, d2]) => {
+              return d1 - d2;
+            })[0];
+            setCaughtFish(closestFish[0]);
+          }
+          return fish;
+        } else {
+          if (y > SEA_LEVEL) {
+            setCaughtFish(null);
+            dispatch({
+              type: SCORE,
+              value:
+                1 +
+                Math.abs((fish.find((f) => f.id === caughtFish) as IFish).vx),
+            });
+            const fishLeft = fish.filter((f) => f.id !== caughtFish);
+            return [
+              ...fishLeft,
+              ...generateFish(
+                1 + Math.floor(Math.random() * 3),
+                Boolean(fishLeft.find((f) => FISH.includes(f.icon)))
+              ),
+            ];
+          }
+          return fish.map((f) => {
+            if (f.id === caughtFish) {
+              return {
+                ...f,
+                x: x,
+                y: y - PLAYER_SIZE,
+                vx: 0,
+                vy: 0,
+              };
+            } else return f;
           });
-          const fishLeft = fish.filter((f) => f.id !== caughtFish);
-          return [
-            ...fishLeft,
-            ...generateFish(
-              1 + Math.floor(Math.random() * 3),
-              Boolean(fishLeft.find((f) => FISH.includes(f.icon)))
-            ),
-          ];
         }
-        return fish.map((f) => {
-          if (f.id === caughtFish) {
-            return {
-              ...f,
-              x: x,
-              y: y - PLAYER_SIZE,
-              vx: 0,
-              vy: 0,
-            };
-          } else return f;
-        });
-      }
-    });
+      });
+    }
   }, [
     caughtFish,
+    gameStatus,
     resetVx,
     resetVy,
     resetX,
@@ -309,42 +314,43 @@ export default function App() {
 
   useEffect(() => {
     function update(timestamp: number) {
-      frameRate.current = 1 / ((timestamp - lastFrameRef.current) / 1000);
-      lastFrameRef.current = timestamp;
+      if (gameStatus === "RUNNING") {
+        frameRate.current = 1 / ((timestamp - lastFrameRef.current) / 1000);
+        lastFrameRef.current = timestamp;
 
-      setFish((prevFish) => {
-        const fishClone = prevFish.map((f) => {
-          if (f.id === caughtFish) return f;
-          return {
-            ...f,
-            x: f.x + f.vx,
-            y: H() * 0.1 + H() * 0.02 * Math.sin(f.x / 10),
-            ...(f.x < 0 || f.x > W()
-              ? {
-                  x: f.x < 0 ? 0 : W(),
-                  vx: -vx,
-                }
-              : {}),
-          };
+        setFish((prevFish) => {
+          const fishClone = prevFish.map((f) => {
+            if (f.id === caughtFish) return f;
+            return {
+              ...f,
+              x: f.x + f.vx,
+              y: H() * 0.1 + H() * 0.02 * Math.sin(f.x / 10),
+              ...(f.x < 0 || f.x > W()
+                ? {
+                    x: f.x < 0 ? 0 : W(),
+                    vx: -vx,
+                  }
+                : {}),
+            };
+          });
+          return fishClone;
         });
-        return fishClone;
-      });
 
-      setX((prevX: number) => prevX + vx);
-      setY((prevY: number) => prevY + vy);
-      // Drag
-      setVx((prevVx: number) => prevVx * FRICTION_COEFFICIENT);
+        setX((prevX: number) => prevX + vx);
+        setY((prevY: number) => prevY + vy);
+        // Drag
+        setVx((prevVx: number) => prevVx * FRICTION_COEFFICIENT);
 
-      setVy((_pvy: number) =>
-        isDiving ? -30 * GRAVITY_ACCELERATION : 30 * GRAVITY_ACCELERATION
-      );
-
+        setVy((_pvy: number) =>
+          isDiving ? -30 * GRAVITY_ACCELERATION : 30 * GRAVITY_ACCELERATION
+        );
+      }
       let spacePressed = false;
-
       for (let key of keys) {
         switch (key) {
           case " ":
             startGame();
+            if (gameStatus !== "RUNNING") return;
             spacePressed = true;
             if (!isDiving) {
               if (keys.includes("ArrowLeft")) setVx(-1 * JUMP_ACCELERATION);
@@ -356,18 +362,21 @@ export default function App() {
 
           case "ArrowLeft":
             startGame();
+            if (gameStatus !== "RUNNING") return;
             setVx((_x: number) => -PLAYER_SPEED);
 
             break;
 
           case "ArrowRight":
             startGame();
+            if (gameStatus !== "RUNNING") return;
             setVx((_x: number) => PLAYER_SPEED);
             break;
           default:
         }
       }
 
+      if (gameStatus !== "RUNNING") return;
       if (!spacePressed) setIsDiving(false);
     }
     const frame = requestAnimationFrame(update);
@@ -428,9 +437,7 @@ export default function App() {
         </Grow>
         <Score expanded={gameStatus === "POST_GAME"}>
           <Grow in={gameStatus === "POST_GAME"}>
-            <div>
-              <div>Game over!</div>
-            </div>
+            <GameOver>Game over!</GameOver>
           </Grow>
           <Grow in={gameStatus === "POST_GAME" || gameStatus === "RUNNING"}>
             <div>Score: {Math.round(score)}</div>
