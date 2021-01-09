@@ -433,8 +433,8 @@ export default function App() {
         </Grow>
         <Sky />
         <Ocean ref={oceanRef as any}>
-          {fish.map((fish, i) => (
-            <Grow key={i} in={true} appear>
+          {fish.map((fish) => (
+            <Grow key={String(fish.id)} in={true} appear>
               <Entity
                 style={{
                   zIndex: Z.FISH,
