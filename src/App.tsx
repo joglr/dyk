@@ -538,7 +538,7 @@ export default function App() {
                 <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to move
               </div>
               <div>
-                Hold <Key>space</Key> to plummet
+                Hold <Key>space</Key> to dive
               </div>
               <div>
                 Catch {FISH.join("")}, avoid {ENEMIES.join("")}!
