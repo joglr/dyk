@@ -105,7 +105,18 @@ const Score = styled.div<{ expanded: boolean }>`
   font-weight: bold;
 `;
 
-const TryAgainButton = styled.button``;
+const TryAgainButton = styled.button`
+  font-size: 50%;
+  background: none;
+  text-transform: uppercase;
+  border: 2px black solid;
+  border-radius: 120px;
+  padding: 15px;
+  &:hover {
+    background-color: #eee;
+    cursor: pointer;
+  }
+`;
 
 const GameOver = styled.div`
   color: red;
@@ -451,7 +462,17 @@ export default function App() {
             <TryAgainButton onClick={reset}>Try again</TryAgainButton>
           </Grow>
           <Grow in={gameStatus === "IDLE"}>
-            <div>Press ⬅, ➡ or [space] to start game!</div>
+            <div>
+              <div>Press ⬅, ➡ or [space] to start game!</div>
+              <br />
+              <div
+                style={{
+                  fontSize: "70%",
+                }}
+              >
+                Catch {FISH.join("")}, but avoid {ENEMIES.join("")}!
+              </div>
+            </div>
           </Grow>
         </Score>
       </Overlay>
