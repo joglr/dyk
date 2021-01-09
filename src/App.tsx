@@ -249,30 +249,31 @@ export default function App() {
     console.log(gameStatus);
     if (gameStatus === "RUNNING") {
       setFish((fish) => {
-        if (caughtFish === null) {
-          let fishInProximity: [Symbol, number][] = [];
-          for (let f of fish) {
-            const distance = dist({ x, y }, f);
-            if (distance < PLAYER_SIZE) {
-              if (ENEMIES.includes(f.icon)) {
-                dispatch({ type: END });
-                resetX();
-                resetY();
-                resetVx();
-                resetVy();
-              } else if (FISH.includes(f.icon)) {
-                fishInProximity.push([f.id, distance]);
-              }
+        let fishInProximity: [Symbol, number][] = [];
+
+        for (let f of fish) {
+          const distance = dist({ x, y }, f);
+          if (distance < PLAYER_SIZE) {
+            if (ENEMIES.includes(f.icon)) {
+              dispatch({ type: END });
+              resetX();
+              resetY();
+              resetVx();
+              resetVy();
+            } else if (FISH.includes(f.icon) && caughtFish === null) {
+              fishInProximity.push([f.id, distance]);
             }
           }
-          if (fishInProximity.length > 0) {
-            let closestFish = fishInProximity.sort(([, d1], [, d2]) => {
-              return d1 - d2;
-            })[0];
-            setCaughtFish(closestFish[0]);
-          }
-          return fish;
-        } else {
+        }
+
+        if (fishInProximity.length > 0) {
+          let closestFish = fishInProximity.sort(([, d1], [, d2]) => {
+            return d1 - d2;
+          })[0];
+          setCaughtFish(closestFish[0]);
+        }
+
+        if (caughtFish !== null) {
           if (y > SEA_LEVEL) {
             setCaughtFish(null);
             dispatch({
@@ -302,6 +303,8 @@ export default function App() {
             } else return f;
           });
         }
+
+        return fish;
       });
     }
   }, [
