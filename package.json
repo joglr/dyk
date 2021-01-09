@@ -20,6 +20,7 @@
   },
   "scripts": {
     "preversion": "cross-env CI=true npm run build",
+    "postversion": "git push --all",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
