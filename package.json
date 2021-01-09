@@ -19,6 +19,7 @@
     "web-vitals": "^0.2.4"
   },
   "scripts": {
+    "preversion": "cross-env CI=true npm run build",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
@@ -43,6 +44,7 @@
     ]
   },
   "devDependencies": {
-    "@types/styled-components": "^5.1.7"
+    "@types/styled-components": "^5.1.7",
+    "cross-env": "^7.0.3"
   }
 }
