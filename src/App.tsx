@@ -102,7 +102,6 @@ const EntityIcon = styled.div<any>`
   width: ${PLAYER_SIZE}px;
   height: ${PLAYER_SIZE}px;
   font-size: ${PLAYER_SIZE}px;
-  transition: transform 0.25s;
   transform: translate(-50%, calc(-50% - 5px))
     rotateY(${(p) => (p.direction ? "180deg" : "0")});
 `;
