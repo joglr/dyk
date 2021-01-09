@@ -1,4 +1,4 @@
-import { Grow } from "@material-ui/core";
+import { Fade, Grow } from "@material-ui/core";
 import { useEffect, useReducer, useRef, useState } from "react";
 import styled from "styled-components";
 import {
@@ -176,7 +176,7 @@ function gameStateReducer(prevState: State, action: Action): State {
     case SCORE:
       return {
         gameStatus: prevState.gameStatus,
-        gameStartTime: prevState.gameStartTime,
+        gameStartTime: (prevState.gameStartTime as number) + 1000,
         score: prevState.score + action.value,
       };
     case RESET:
@@ -380,6 +380,7 @@ export default function App() {
             break;
 
           case "ArrowLeft":
+          case "a":
             startGame();
             if (gameStatus !== "RUNNING") return;
             setVx((_x: number) => -PLAYER_SPEED);
@@ -387,6 +388,7 @@ export default function App() {
             break;
 
           case "ArrowRight":
+          case "d":
             startGame();
             if (gameStatus !== "RUNNING") return;
             setVx((_x: number) => PLAYER_SPEED);
@@ -434,7 +436,7 @@ export default function App() {
         <Sky />
         <Ocean ref={oceanRef as any}>
           {fish.map((fish) => (
-            <Grow key={String(fish.id)} in={true} appear>
+            <Fade key={String(fish.id)} in={true} appear>
               <Entity
                 style={{
                   zIndex: Z.FISH,
@@ -443,7 +445,7 @@ export default function App() {
               >
                 <EntityIcon direction={fish.vx > 0}>{fish.icon}</EntityIcon>
               </Entity>
-            </Grow>
+            </Fade>
           ))}
         </Ocean>
         {gameStartTime && (
@@ -474,6 +476,7 @@ export default function App() {
         <Grow in={gameStatus === "IDLE"}>
           <HelpText>
             <div>Press ⬅, ➡ or [space] to start game!</div>
+            <div>Hold space to plummet!</div>
             <br />
             <div
               style={{
