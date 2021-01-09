@@ -156,11 +156,18 @@ const GameOver = styled.div`
 `;
 
 const FISH = ["🐡", "🐟", "🐠", "🦐"];
-const ENEMIES: string[] = ["🐋", "🦈", "🦑", ""];
+const ENEMIES: string[] = ["🐋", "🦈", "🦑"];
+
+const EnemyNames = {
+  "🐋": "a whale",
+  "🦈": "a shark",
+  "🦑": "an octopus",
+};
 
 interface State {
   gameStatus: "IDLE" | "POST_GAME" | "RUNNING";
   gameStartTime: number | null;
+  endReason: string | null;
   score: number;
 }
 
@@ -177,6 +184,7 @@ type Action =
     }
   | {
       type: ActionType.END;
+      reason: string;
     }
   | {
       type: ActionType.RESET;
@@ -197,18 +205,21 @@ function gameStateReducer(prevState: State, action: Action): State {
         gameStatus: "RUNNING",
         gameStartTime: new Date().getTime(),
         score: 0,
+        endReason: null,
       };
     case END:
       return {
         gameStatus: "POST_GAME",
         gameStartTime: null,
         score: prevState.score,
+        endReason: action.reason,
       };
     case SCORE:
       return {
         gameStatus: prevState.gameStatus,
         gameStartTime: (prevState.gameStartTime as number) + 1000,
         score: prevState.score + action.value,
+        endReason: null,
       };
     case RESET:
       return getInitialState();
@@ -220,6 +231,7 @@ function getInitialState(): State {
     gameStatus: "IDLE",
     gameStartTime: null,
     score: 0,
+    endReason: null,
   };
 }
 
@@ -243,9 +255,10 @@ function generateFish(count: number, onlyFish = false) {
 export default function App() {
   const [debug, setDebug] = useState(false);
 
-  const [{ gameStartTime, gameStatus, score }, dispatch] = useReducer<
-    Reducer<State, Action>
-  >(gameStateReducer, getInitialState());
+  const [
+    { gameStartTime, gameStatus, score, endReason },
+    dispatch,
+  ] = useReducer<Reducer<State, Action>>(gameStateReducer, getInitialState());
 
   const [highScore, setHighScore] = useLocalStorage<number | null>(
     TIMED_HIGH_SCORE_STORAGE_KEY,
@@ -285,12 +298,15 @@ export default function App() {
     resetDiveTime();
   }
 
-  const endGame = useCallback(() => {
-    if (!highScore || score > highScore) {
-      setHighScore(score);
-    }
-    dispatch({ type: END });
-  }, [highScore, score, setHighScore]);
+  const endGame = useCallback(
+    (reason) => {
+      if (!highScore || score > highScore) {
+        setHighScore(score);
+      }
+      dispatch({ type: END, reason });
+    },
+    [highScore, score, setHighScore]
+  );
 
   const lastFrameRef = useRef(0);
   const frameRate = useRef(0);
@@ -315,7 +331,7 @@ export default function App() {
           const distance = dist({ x, y }, f);
           if (distance < PLAYER_SIZE) {
             if (ENEMIES.includes(f.icon)) {
-              if (!canceled) endGame();
+              if (!canceled) endGame("You were eaten by " + EnemyNames[f.icon]);
               resetX();
               resetY();
               resetVx();
@@ -473,11 +489,11 @@ export default function App() {
     diveTime !== null ? (new Date().getTime() - diveTime) / 1000 : null;
 
   useEffect(() => {
-    if (
-      (timeElapsedInSeconds && timeElapsedInSeconds >= GAME_DURATION) ||
-      (diveDurationInSeconds && diveDurationInSeconds >= BREATH_DURATION)
-    ) {
-      endGame();
+    if (timeElapsedInSeconds && timeElapsedInSeconds >= GAME_DURATION) {
+      endGame("Times up!");
+    }
+    if (diveDurationInSeconds && diveDurationInSeconds >= BREATH_DURATION) {
+      endGame("You drowned");
     }
   }, [timeElapsedInSeconds, diveDurationInSeconds, endGame]);
 
@@ -546,6 +562,7 @@ export default function App() {
         <Grow in={gameStatus === "POST_GAME"}>
           <div>
             <GameOver>Game over!</GameOver>
+            <div>{endReason}</div>
             <TryAgainButton onClick={reset}>Try again</TryAgainButton>
           </div>
         </Grow>
