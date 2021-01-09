@@ -12,17 +12,19 @@ import { dist, pick } from "./util";
 const W = () => window.innerWidth;
 const H = () => window.innerHeight;
 const GAME_DURATION = 30;
-const PLAYER_SIZE = 24;
+const BREATH_DURATION = 3;
+const PLAYER_SIZE = 32;
 const JUMP_ACCELERATION = 70;
 const GRAVITY_ACCELERATION = 1 / 5;
 const MIN_COORD = PLAYER_SIZE / 2;
 const FRICTION_COEFFICIENT = 1 - 1 / 100;
 const PLAYER_SPEED = 2;
-const SEA_LEVEL = 0.2 * H();
+const OCEAN_LEVEL_FRACTION = 0.4;
+const getOceanLevel = () => OCEAN_LEVEL_FRACTION * H();
 
 const Z = {
   SKY: -200,
-  FISH: -100,
+  FISH: -20 % 100,
   OCEAN: 100,
 };
 
@@ -49,7 +51,7 @@ const Overlay = styled.div`
   position: absolute;
   top: ${PLAYER_SIZE}px;
   left: ${PLAYER_SIZE}px;
-  font-size: 400%;
+  font-size: 300%;
   font-weight: bold;
 `;
 
@@ -63,16 +65,28 @@ const World = styled.div`
 `;
 
 const Sky = styled.div`
-  height: 80%;
+  height: ${100 - OCEAN_LEVEL_FRACTION * 100}%;
   z-index: ${Z.SKY};
   background-color: hsl(232deg 100% 89%);
 `;
 
 const Ocean = styled.div`
   background-color: hsl(229 100% 50% / 0.6);
-  /* background-color: hsla(200, 100%, 20%, 0.3); */
-  height: 20%;
+  height: ${OCEAN_LEVEL_FRACTION * 100}%;
   z-index: ${Z.OCEAN};
+`;
+
+const BreathMeter = styled.div.attrs((p: { ratio: number }) => ({
+  style: {
+    width: `${p.ratio * 100}%`,
+  },
+}))<{ ratio: number }>`
+  height: 20px;
+  width: 0;
+  background-color: red;
+  position: absolute;
+  top: 0;
+  left: 0;
 `;
 
 const Entity = styled.div.attrs((p: any) => ({
@@ -91,11 +105,6 @@ const Debug = styled.code`
   position: absolute;
   bottom: 0;
   font-family: monospace;
-`;
-
-const HelpText = styled.div`
-  position: absolute;
-  top: 0;
 `;
 
 const EntityIcon = styled.div<any>`
@@ -117,6 +126,26 @@ const TryAgainButton = styled.button`
     background-color: #eee;
     cursor: pointer;
   }
+`;
+
+const HelpText = styled.div`
+  position: absolute;
+  top: 0;
+  line-height: 125%;
+`;
+
+const Controls = styled.div`
+  margin-top: 20px;
+  font-size: 70%;
+`;
+
+const Key = styled.span`
+  background-color: #fff;
+  box-shadow: 0 0 0 2px black inset, 0 0 4px 0 black inset;
+
+  border-radius: 15px;
+  padding: 0 7px;
+  /* margin: -15px 0; */
 `;
 
 const GameOver = styled.div`
@@ -198,7 +227,7 @@ function generateFish(count: number, onlyFish = false) {
     fish.push({
       id: Symbol(),
       x: Math.random() * W(),
-      y: SEA_LEVEL * Math.random(),
+      y: getOceanLevel() * Math.random(),
       vx: Math.random() - 0.5,
       vy: 0,
       icon: pick([...FISH, ...(onlyFish ? [] : ENEMIES)]),
@@ -222,10 +251,16 @@ export default function App() {
     W() - MIN_COORD,
     W() / 2
   );
-  const [y, setY, resetY] = useClampedState(MIN_COORD, H() / 2, H() / 2);
+  const [y, setY, resetY] = useClampedState(
+    MIN_COORD,
+    ((1 - OCEAN_LEVEL_FRACTION) / 2 + OCEAN_LEVEL_FRACTION) * H(),
+    ((1 - OCEAN_LEVEL_FRACTION) / 2 + OCEAN_LEVEL_FRACTION) * H()
+  );
 
   const [caughtFish, setCaughtFish] = useResetableState<Symbol | null>(null);
-
+  const [diveTime, setDiveTime, resetDiveTime] = useResetableState<
+    number | null
+  >(null);
   const [isDiving, setIsDiving] = useResetableState(false);
 
   const [fish, setFish, resetFish] = useResetableState<IFish[]>(() =>
@@ -239,6 +274,7 @@ export default function App() {
     resetY();
     resetVx();
     resetVy();
+    resetDiveTime();
   }
 
   const lastFrameRef = useRef(0);
@@ -250,6 +286,13 @@ export default function App() {
     let canceled = false;
 
     if (gameStatus === "RUNNING") {
+      if (y < getOceanLevel() && !diveTime) {
+        setDiveTime(new Date().getTime());
+      }
+      if (y > getOceanLevel() && diveTime) {
+        resetDiveTime();
+      }
+
       setFish((fish) => {
         let fishInProximity: [Symbol, number][] = [];
 
@@ -276,7 +319,7 @@ export default function App() {
         }
 
         if (caughtFish !== null) {
-          if (y > SEA_LEVEL) {
+          if (y > getOceanLevel()) {
             setCaughtFish(null);
             const cf = fish.find((f) => f.id === caughtFish);
             if (cf) {
@@ -320,6 +363,8 @@ export default function App() {
     resetY,
     setCaughtFish,
     setFish,
+    setDiveTime,
+    diveTime,
     x,
     y,
   ]);
@@ -388,7 +433,6 @@ export default function App() {
 
           case "ArrowRight":
           case "d":
-            startGame();
             if (gameStatus !== "RUNNING") return;
             setVx((_x: number) => PLAYER_SPEED);
             break;
@@ -408,15 +452,19 @@ export default function App() {
       ? (new Date().getTime() - gameStartTime) / 1000
       : null;
 
+  const diveDurationInSeconds =
+    diveTime !== null ? (new Date().getTime() - diveTime) / 1000 : null;
+
   useEffect(() => {
-    if (timeElapsedInSeconds && timeElapsedInSeconds >= GAME_DURATION) {
+    if (
+      (timeElapsedInSeconds && timeElapsedInSeconds >= GAME_DURATION) ||
+      (diveDurationInSeconds && diveDurationInSeconds >= BREATH_DURATION)
+    ) {
       dispatch({ type: END });
     }
-  }, [timeElapsedInSeconds]);
+  }, [timeElapsedInSeconds, diveDurationInSeconds]);
 
   useKeyBinding("d", () => setDebug((debug) => !debug), true);
-
-  const oceanRef = useRef<HTMLElement>();
 
   return (
     <>
@@ -432,8 +480,17 @@ export default function App() {
             <div>caughtFish: {caughtFish}</div>
           </Debug>
         </Grow>
+        <Grow in={gameStatus === "RUNNING"}>
+          <BreathMeter
+            ratio={
+              diveDurationInSeconds
+                ? diveDurationInSeconds / BREATH_DURATION
+                : 0
+            }
+          />
+        </Grow>
         <Sky />
-        <Ocean ref={oceanRef as any}>
+        <Ocean>
           {fish.map((fish) => (
             <Fade key={String(fish.id)} in={true} appear>
               <Entity
@@ -474,16 +531,23 @@ export default function App() {
         </Grow>
         <Grow in={gameStatus === "IDLE"}>
           <HelpText>
-            <div>Press ⬅, ➡ or [space] to start game!</div>
-            <div>Hold space to plummet!</div>
-            <br />
-            <div
-              style={{
-                fontSize: "70%",
-              }}
-            >
-              Catch {FISH.join("")}, but avoid {ENEMIES.join("")}!
-            </div>
+            <h1>🦅 Plummet</h1>
+            <div>Press any key to start the game!</div>
+            <Controls>
+              <div>
+                <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to move
+              </div>
+              <div>
+                Hold <Key>space</Key> to plummet
+              </div>
+              <div>
+                Catch {FISH.join("")}, avoid {ENEMIES.join("")}!
+              </div>
+              <div>
+                You got <u>{GAME_DURATION}</u> seconds
+              </div>
+              <div>Watch your breath!</div>
+            </Controls>
           </HelpText>
         </Grow>
       </Overlay>
