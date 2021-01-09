@@ -158,7 +158,7 @@ const GameOver = styled.div`
 const FISH = ["🐡", "🐟", "🐠", "🦐"];
 const ENEMIES: string[] = ["🐋", "🦈", "🦑"];
 
-const EnemyNames = {
+const EnemyNames: { [enemy: string]: string } = {
   "🐋": "a whale",
   "🦈": "a shark",
   "🦑": "an octopus",
@@ -300,12 +300,14 @@ export default function App() {
 
   const endGame = useCallback(
     (reason) => {
-      if (!highScore || score > highScore) {
-        setHighScore(score);
+      if (gameStatus === "RUNNING") {
+        if (!highScore || score > highScore) {
+          setHighScore(score);
+        }
+        dispatch({ type: END, reason });
       }
-      dispatch({ type: END, reason });
     },
-    [highScore, score, setHighScore]
+    [gameStatus, highScore, score, setHighScore]
   );
 
   const lastFrameRef = useRef(0);
