@@ -118,8 +118,10 @@ const EntityIcon = styled.div<any>`
   width: ${PLAYER_SIZE}px;
   height: ${PLAYER_SIZE}px;
   font-size: ${PLAYER_SIZE}px;
+  transition: transform 0.25s;
   transform: translate(-50%, calc(-50% - 5px))
-    rotateY(${(p) => (p.direction ? "180deg" : "0")});
+    rotateY(${(p) => (p.direction ? "180deg" : "0")})
+    rotateZ(${(p) => (p.isDiving ? "-45deg" : "0")});
 `;
 
 const TryAgainButton = styled.button`
@@ -552,7 +554,9 @@ export default function App() {
         </Ocean>
         {gameStartTime && (
           <Entity pos={[x, y]}>
-            <EntityIcon direction={vx > 0}>🦅</EntityIcon>
+            <EntityIcon direction={vx > 0} isDiving={isDiving}>
+              🦅
+            </EntityIcon>
           </Entity>
         )}
       </World>
