@@ -166,10 +166,9 @@ const Version = styled.div`
 `;
 
 const FISH = ["🐡", "🐟", "🐠", "🦐"];
-const ENEMIES: string[] = ["🐋", "🦈", "🦑"];
+const ENEMIES: string[] = ["🦈", "🦑"];
 
 const EnemyNames: { [enemy: string]: string } = {
-  "🐋": "a whale",
   "🦈": "a shark",
   "🦑": "an octopus",
 };
