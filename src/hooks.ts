@@ -8,20 +8,81 @@ import {
 import { clamp } from "./util";
 
 export function useKeyBinding(
-  key: KeyboardEvent["key"],
+  keys: KeyboardEvent["key"][],
   callback: Function,
   keydown = false
 ) {
   useEffect(() => {
     function handler(event: KeyboardEvent) {
-      if (event.key === key) {
+      if (keys.includes(event.key)) {
         callback();
       }
     }
     document.addEventListener(keydown ? "keydown" : "keyup", handler);
     return () =>
       document.removeEventListener(keydown ? "keydown" : "keyup", handler);
-  }, [callback, key, keydown]);
+  }, [callback, keys, keydown]);
+}
+
+export function usePress(downHandler?: Function) {
+  const [pressPos, setPressPos] = useState<[number, number] | null>(null);
+
+  function onMouseDown(event: MouseEvent) {
+    setPressPos([event.pageX, event.pageY]);
+    if (downHandler) downHandler();
+  }
+  function onMouseMove(event: MouseEvent) {
+    if (pressPos) {
+      setPressPos([event.pageX, event.pageY]);
+    }
+  }
+  function onMouseUp() {
+    setPressPos(null);
+  }
+  function onTouchStart(event: TouchEvent) {
+    setPressPos([event.touches[0].clientX, event.touches[0].clientY]);
+  }
+  function onTouchMove(event: TouchEvent) {
+    if (pressPos) {
+      setPressPos([event.touches[0].clientX, event.touches[0].clientY]);
+    }
+  }
+  function onTouchEnd() {
+    setPressPos(null);
+  }
+
+  // if (element) {
+  //   // element.addEventListener("mousedown", mousedownHandler);
+  //   // element.addEventListener("mousemove", mousemoveHandler);
+  //   // element.addEventListener("mouseup", mouseupHandler);
+  //   element.addEventListener("touchstart", onTouchStart);
+  //   element.addEventListener("touchmove", onTouchMove);
+  //   element.addEventListener("touchend", touchendHandler);
+  // }
+
+  // return () => {
+  //   // element.removeEventListener("mousedown", mousedownHandler);
+  //   // element.addEventListener("mousemove", mousemoveHandler);
+  //   // element.removeEventListener("mouseup", mouseupHandler);
+  //   if (element) {
+  //     element.removeEventListener("touchstart", onTouchStart);
+  //     element.addEventListener("touchmove", onTouchMove);
+  //     element.removeEventListener("touchend", touchendHandler);
+  //   }
+  // };
+  // }, [downHandler, elementRef, pressPos]);
+
+  return {
+    pressProps: {
+      onMouseDown,
+      onMouseMove,
+      onMouseUp,
+      onTouchStart,
+      onTouchMove,
+      onTouchEnd,
+    },
+    pressPos,
+  };
 }
 
 export function useLocalStorage<T>(key: string, initialValue: T) {

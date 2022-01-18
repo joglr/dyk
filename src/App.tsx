@@ -6,10 +6,12 @@ import {
   useKeyBinding,
   useKeys,
   useLocalStorage,
+  usePress,
   useResetableState,
 } from "./hooks";
 import { dist, pick } from "./util";
 import pkg from "./../package.json";
+import { useMediaQuery } from "beautiful-react-hooks";
 
 const W = () => window.innerWidth;
 const H = () => window.innerHeight;
@@ -22,8 +24,11 @@ const MIN_COORD = PLAYER_SIZE / 2;
 const FRICTION_COEFFICIENT = 1 - 1 / 100;
 const PLAYER_SPEED = 2;
 const OCEAN_LEVEL_FRACTION = 0.4;
+const MIDDLE_TAP_REGION = 20;
 const getOceanLevel = () => OCEAN_LEVEL_FRACTION * H();
 const TIMED_HIGH_SCORE_STORAGE_KEY = "timed_highscore";
+const SMALL_SCREEN = 768;
+const SMALL_SCREEN_MQ = `(max-width: ${SMALL_SCREEN}px)`;
 
 const Z = {
   SKY: -200,
@@ -37,13 +42,15 @@ export interface IPositioned {
 }
 
 export interface IEntity extends IPositioned {
-  id: Symbol;
+  id: string;
   vx: number;
   vy: number;
   icon: string;
 }
 
-interface IFish extends IEntity {}
+interface IFish extends IEntity {
+  speed: number;
+}
 
 const Overlay = styled.div`
   position: absolute;
@@ -55,10 +62,18 @@ const Overlay = styled.div`
   left: ${PLAYER_SIZE}px;
   font-size: 300%;
   font-weight: bold;
+
+  @media ${SMALL_SCREEN_MQ} {
+    font-size: 200%;
+  }
 `;
 
 const H1 = styled.h1`
   margin-bottom: 0.5em;
+
+  @media (max-width: ${SMALL_SCREEN}px) {
+    font-size: 100%;
+  }
 `;
 
 const World = styled.div`
@@ -112,6 +127,9 @@ const Debug = styled.code`
   position: absolute;
   bottom: 0;
   font-family: monospace;
+  white-space: pre;
+  user-select: none;
+  pointer-events: none;
 `;
 
 const EntityIcon = styled.div<any>`
@@ -145,10 +163,14 @@ const Key = styled.span`
   /* margin: -15px 0; */
 `;
 
-const HelpText = styled.div`
+const LaunchScreen = styled.div`
   position: absolute;
   top: 0;
+`;
+
+const HelpText = styled.div`
   line-height: 125%;
+  pointer-events: none;
   div:not(${Key}) {
     /* -webkit-text-stroke: 1px #fff; */
   }
@@ -175,39 +197,52 @@ const EnemyNames: { [enemy: string]: string } = {
   "🦑": "an octopus",
 };
 
+enum ICON_TYPE {
+  FISH,
+  ENEMY,
+  BOTH,
+}
+
 interface State {
   gameStatus: "IDLE" | "POST_GAME" | "RUNNING";
   gameStartTime: number | null;
+  controlMode: CONTROL_MODE | null;
   endReason: string | null;
   score: number;
 }
 
-enum ActionType {
+enum ACTION_TYPE {
   START,
   END,
   SCORE,
   RESET,
 }
 
+enum CONTROL_MODE {
+  KEYBOARD = "KEYBOARD",
+  PRESS = "PRESS",
+}
+
 type Action =
   | {
-      type: ActionType.START;
+      type: ACTION_TYPE.START;
+      controlMode: CONTROL_MODE;
     }
   | {
-      type: ActionType.END;
+      type: ACTION_TYPE.END;
       reason: string;
     }
   | {
-      type: ActionType.RESET;
+      type: ACTION_TYPE.RESET;
     }
   | {
-      type: ActionType.SCORE;
+      type: ACTION_TYPE.SCORE;
       value: number;
     };
 
 type Reducer<S, A> = (prevState: S, action: A) => S;
 
-const { START, END, SCORE, RESET } = ActionType;
+const { START, END, SCORE, RESET } = ACTION_TYPE;
 
 function gameStateReducer(prevState: State, action: Action): State {
   switch (action.type) {
@@ -215,6 +250,7 @@ function gameStateReducer(prevState: State, action: Action): State {
       return {
         gameStatus: "RUNNING",
         gameStartTime: new Date().getTime(),
+        controlMode: action.controlMode,
         score: 0,
         endReason: null,
       };
@@ -222,12 +258,14 @@ function gameStateReducer(prevState: State, action: Action): State {
       return {
         gameStatus: "POST_GAME",
         gameStartTime: null,
+        controlMode: null,
         score: prevState.score,
         endReason: action.reason,
       };
     case SCORE:
       return {
         gameStatus: prevState.gameStatus,
+        controlMode: prevState.controlMode,
         gameStartTime: (prevState.gameStartTime as number) + 1000,
         score: prevState.score + action.value,
         endReason: null,
@@ -241,22 +279,30 @@ function getInitialState(): State {
   return {
     gameStatus: "IDLE",
     gameStartTime: null,
+    controlMode: null,
     score: 0,
     endReason: null,
   };
 }
 
-function generateFish(count: number, onlyFish = false) {
+function generateFish(
+  count: number,
+  iconType: ICON_TYPE = ICON_TYPE.BOTH
+): IFish[] {
   let fish = [];
 
   for (let i = 0; i < count; i++) {
     fish.push({
-      id: Symbol(),
+      id: btoa(`${performance.now() * 10 ** 10}${Math.random() * 10 ** 16}`),
       x: Math.random() * W(),
       y: getOceanLevel() * Math.random(),
-      vx: Math.random() - 0.5,
+      vx: 0.25 + Math.random() * 1.75,
       vy: 0,
-      icon: pick([...FISH, ...(onlyFish ? [] : ENEMIES)]),
+      speed: 5 + Math.random() * 5,
+      icon: pick([
+        ...(iconType !== ICON_TYPE.ENEMY ? [] : FISH),
+        ...(iconType !== ICON_TYPE.FISH ? [] : ENEMIES),
+      ]),
     });
   }
 
@@ -264,10 +310,11 @@ function generateFish(count: number, onlyFish = false) {
 }
 
 export default function App() {
-  const [debug, setDebug] = useState(false);
+  const [debug, setDebug] = useState(process.env.NODE_ENV === "development");
+  const isSmall = useMediaQuery(SMALL_SCREEN_MQ);
 
   const [
-    { gameStartTime, gameStatus, score, endReason },
+    { gameStartTime, gameStatus, controlMode, score, endReason },
     dispatch,
   ] = useReducer<Reducer<State, Action>>(gameStateReducer, getInitialState());
 
@@ -289,7 +336,7 @@ export default function App() {
     ((1 - OCEAN_LEVEL_FRACTION) / 2 + OCEAN_LEVEL_FRACTION) * H()
   );
 
-  const [caughtFish, setCaughtFish] = useResetableState<Symbol | null>(null);
+  const [caughtFish, setCaughtFish] = useResetableState<IFish | null>(null);
   const [diveTime, setDiveTime, resetDiveTime] = useResetableState<
     number | null
   >(null);
@@ -298,6 +345,15 @@ export default function App() {
   const [fish, setFish, resetFish] = useResetableState<IFish[]>(() =>
     generateFish(10)
   );
+
+  const lastFrameRef = useRef(0);
+  const frameRate = useRef(0);
+  // const worldRef = useRef<HTMLElement | null>(null);
+
+  const keys = useKeys();
+  const { pressProps: worldProps, pressPos: press } = usePress(() => {
+    beginGame(CONTROL_MODE.PRESS);
+  });
 
   function reset() {
     resetFish();
@@ -321,10 +377,14 @@ export default function App() {
     [gameStatus, highScore, score, setHighScore]
   );
 
-  const lastFrameRef = useRef(0);
-  const frameRate = useRef(0);
-
-  const keys = useKeys();
+  const beginGame = useCallback(
+    function startGame(controlMode: CONTROL_MODE) {
+      if (gameStatus === "IDLE") {
+        dispatch({ type: START, controlMode });
+      }
+    },
+    [gameStatus]
+  );
 
   useEffect(() => {
     let canceled = false;
@@ -338,7 +398,7 @@ export default function App() {
       }
 
       setFish((fish) => {
-        let fishInProximity: [Symbol, number][] = [];
+        let fishInProximity: [IFish, number][] = [];
 
         for (let f of fish) {
           const distance = dist({ x, y }, f);
@@ -350,7 +410,7 @@ export default function App() {
               resetVx();
               resetVy();
             } else if (FISH.includes(f.icon) && caughtFish === null) {
-              fishInProximity.push([f.id, distance]);
+              fishInProximity.push([f, distance]);
             }
           }
         }
@@ -365,24 +425,25 @@ export default function App() {
         if (caughtFish !== null) {
           if (y > getOceanLevel()) {
             setCaughtFish(null);
-            const cf = fish.find((f) => f.id === caughtFish);
+            const cf = caughtFish;
             if (cf) {
               dispatch({
                 type: SCORE,
                 value: 1 + Math.abs(cf.vx),
               });
-              const fishLeft = fish.filter((f) => f.id !== caughtFish);
+              const fishLeft = fish.filter((f) => f.id !== caughtFish.id);
               return [
                 ...fishLeft,
                 ...generateFish(
                   1 + Math.floor(Math.random() * 3),
-                  Boolean(fishLeft.find((f) => FISH.includes(f.icon)))
+                  ICON_TYPE.FISH
                 ),
+                ...generateFish(Math.round(Math.random()), ICON_TYPE.ENEMY),
               ];
             }
           }
           return fish.map((f) => {
-            if (f.id === caughtFish) {
+            if (f.id === caughtFish.id) {
               return {
                 ...f,
                 x: x,
@@ -415,12 +476,6 @@ export default function App() {
     endGame,
   ]);
 
-  function startGame() {
-    if (gameStatus === "IDLE") {
-      dispatch({ type: START });
-    }
-  }
-
   useEffect(() => {
     function update(timestamp: number) {
       if (gameStatus === "RUNNING") {
@@ -429,15 +484,15 @@ export default function App() {
 
         setFish((prevFish) => {
           const fishClone = prevFish.map((f) => {
-            if (f.id === caughtFish) return f;
+            if (f.id === caughtFish?.id) return f;
             return {
               ...f,
               x: f.x + f.vx,
-              y: H() * 0.1 + H() * 0.02 * Math.sin(f.x / 10),
+              y: H() * 0.1 + H() * 0.02 * Math.sin(f.x / f.speed),
               ...(f.x < 0 || f.x > W()
                 ? {
                     x: f.x < 0 ? 0 : W(),
-                    vx: -vx,
+                    vx: -f.vx,
                   }
                 : {}),
             };
@@ -454,40 +509,74 @@ export default function App() {
           isDiving ? -30 * GRAVITY_ACCELERATION : 30 * GRAVITY_ACCELERATION
         );
       }
-      let spacePressed = false;
+
+      let diveActionActive = false;
+
       for (let key of keys) {
         switch (key) {
+          case "ArrowDown":
           case " ":
-            startGame();
-            if (gameStatus !== "RUNNING") return;
-            spacePressed = true;
-            if (!isDiving) {
-              if (keys.includes("ArrowLeft")) setVx(-1 * JUMP_ACCELERATION);
-              else if (keys.includes("ArrowRight")) setVx(JUMP_ACCELERATION);
-              // setVy(-JUMP_ACCELERATION);
-              setIsDiving(true);
+          case "s":
+            if (
+              gameStatus === "RUNNING" &&
+              controlMode === CONTROL_MODE.KEYBOARD
+            ) {
+              diveActionActive = true;
+              if (!isDiving) {
+                if (keys.includes("ArrowLeft")) setVx(-1 * PLAYER_SPEED);
+                else if (keys.includes("ArrowRight")) setVx(PLAYER_SPEED);
+                setIsDiving(true);
+              }
             }
             break;
 
           case "ArrowLeft":
           case "a":
-            startGame();
-            if (gameStatus !== "RUNNING") return;
-            setVx((_x: number) => -PLAYER_SPEED);
+            if (
+              gameStatus === "RUNNING" &&
+              controlMode === CONTROL_MODE.KEYBOARD
+            ) {
+              // setVx((_x: number) => -PLAYER_SPEED);
+            }
 
             break;
 
           case "ArrowRight":
           case "d":
-            if (gameStatus !== "RUNNING") return;
-            setVx((_x: number) => PLAYER_SPEED);
+            if (
+              gameStatus === "RUNNING" &&
+              controlMode === CONTROL_MODE.KEYBOARD
+            ) {
+              // setVx((_x: number) => PLAYER_SPEED);
+            }
             break;
           default:
         }
       }
 
-      if (gameStatus !== "RUNNING") return;
-      if (!spacePressed) setIsDiving(false);
+      if (press && press[1] < getOceanLevel()) {
+        diveActionActive = true;
+        if (!isDiving) {
+          setIsDiving(true);
+
+          if (press[0] - MIDDLE_TAP_REGION < W() / 2) setVx(-1 * PLAYER_SPEED);
+          else if (press[0] + MIDDLE_TAP_REGION > W() / 2) setVx(PLAYER_SPEED);
+        }
+      }
+
+      if (gameStatus === "RUNNING") {
+        switch (controlMode) {
+          case CONTROL_MODE.KEYBOARD:
+            if (!diveActionActive) setIsDiving(false);
+            break;
+          case CONTROL_MODE.PRESS:
+            if (!press) {
+              setIsDiving(false);
+              setVx(0);
+            }
+            break;
+        }
+      }
     }
     const frame = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frame);
@@ -510,22 +599,49 @@ export default function App() {
     }
   }, [timeElapsedInSeconds, diveDurationInSeconds, endGame]);
 
-  useKeyBinding("r", () => {
+  useKeyBinding(["r"], () => {
     if (gameStatus === "RUNNING") reset();
   });
-  useKeyBinding("d", () => setDebug((debug) => !debug));
+  useKeyBinding(["F2"], () => setDebug((debug) => !debug));
+
+  useKeyBinding(
+    [" ", "ArrowDown", "ArrowLeft", "ArrowRight", "a", "s", "d"],
+    () => {
+      beginGame(CONTROL_MODE.KEYBOARD);
+    }
+  );
+
+  const debugItems = {
+    fps: frameRate.current.toFixed(0),
+    x: x.toFixed(0),
+    y: y.toFixed(0),
+    vx: vx.toFixed(0),
+    vy: vy.toFixed(0),
+    controlMode: controlMode,
+    // isDiving: isDiving.toString(),
+    cvx: caughtFish && caughtFish.vx,
+  };
+
+  const longestKey =
+    Object.keys(debugItems).reduce((record, next) => {
+      if (next.length > record) return next.length;
+      return record;
+    }, 0) + 1;
 
   return (
     <>
-      <World>
+      {/* ts-ignore */}
+      <World
+      // {...worldProps}
+      >
         <Grow in={debug}>
           <Debug>
-            <div>fps: {frameRate.current.toFixed(0)}</div>
-            <div>x: {x.toFixed(0)}</div>
-            <div>y: {y.toFixed(0)}</div>
-            <div>vx: {vx.toFixed(0)}</div>
-            <div>vy: {vy.toFixed(0)}</div>
-            <div>isDiving: {isDiving.toString()}</div>
+            {Object.entries(debugItems)
+              .map(
+                ([key, value]) =>
+                  `${key}${" ".repeat(longestKey - key.length)}${value}`
+              )
+              .join("\n")}
           </Debug>
         </Grow>
         <Grow in={gameStatus === "RUNNING"}>
@@ -581,30 +697,49 @@ export default function App() {
           <div>
             <GameOver>Game over!</GameOver>
             <div>{endReason}</div>
-            <TryAgainButton onClick={reset}>Try again</TryAgainButton>
+            <TryAgainButton
+              onClick={(e) => {
+                e.stopPropagation();
+                reset();
+              }}
+            >
+              Try again
+            </TryAgainButton>
           </div>
         </Grow>
         <Grow in={gameStatus === "IDLE"}>
-          <HelpText>
-            <H1>Plummet 🦅</H1>
-            <div>
-              {" >"} Press any key to start! {" < "}
-            </div>
-            <Controls>
-              <div>
-                <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to move.
-                Hold <Key>space</Key> to dive
-              </div>
-              <div>
-                Catch {FISH.join("")}, avoid {ENEMIES.join("")}!
-              </div>
-              <div>
-                You got <u>{GAME_DURATION}</u> seconds, watch your breath!
-              </div>
-              {highScore && <div>Your high score: {highScore}</div>}
-              <Version>Version {pkg.version}</Version>
-            </Controls>
-          </HelpText>
+          <LaunchScreen>
+            <button
+              onClick={() => document.documentElement.requestFullscreen()}
+            >
+              Fullscreen
+            </button>
+            <HelpText>
+              <H1>Plummet 🦅</H1>
+              <div>Press {isSmall ? "anywhere" : "any key"} to start!</div>
+              <Controls>
+                {isSmall ? (
+                  <>
+                    <div>Touch left side of the screen to dive left</div>
+                    <div>Touch right side of the screen to dive left</div>
+                  </>
+                ) : (
+                  <div>
+                    <Key>⬅</Key> <Key>➡</Key> or <Key>A</Key> <Key>D</Key> to
+                    move. Hold <Key>space</Key> to dive
+                  </div>
+                )}
+                <div>
+                  Catch {FISH.join("")}, avoid {ENEMIES.join("")}!
+                </div>
+                <div>
+                  You got <u>{GAME_DURATION}</u> seconds, watch your breath!
+                </div>
+                {highScore && <div>Your high score: {highScore}</div>}
+                <Version>Version {pkg.version}</Version>
+              </Controls>
+            </HelpText>
+          </LaunchScreen>
         </Grow>
       </Overlay>
     </>
