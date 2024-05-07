@@ -586,7 +586,7 @@ export default function App() {
         </Grow>
         <Grow in={gameStatus === "IDLE"}>
           <HelpText>
-            <H1>Plummet 🦅</H1>
+            <H1>Dyk 🦅</H1>
             <div>
               {" >"} Press any key to start! {" < "}
             </div>
